@@ -8,6 +8,7 @@ export type AccessTokenPayload = {
   email: string;
   plan: "FREE" | "PRO";
   status: "INACTIVE" | "ACTIVE" | "CANCELED" | "PAST_DUE";
+  role?: "admin" | "user" | null;
 };
 
 export async function hashPassword(password: string): Promise<string> {

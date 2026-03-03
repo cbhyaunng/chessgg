@@ -26,6 +26,7 @@ export async function optionalAuth(req: Request, _res: Response, next: NextFunct
       email: payload.email,
       plan: payload.plan,
       status: payload.status,
+      role: payload.role ?? null,
     };
 
     next();
@@ -48,6 +49,7 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
       email: payload.email,
       plan: payload.plan,
       status: payload.status,
+      role: payload.role ?? null,
     };
 
     next();
@@ -74,6 +76,30 @@ export async function requireActiveSubscription(req: Request, res: Response, nex
 
   req.auth.plan = subscription.plan;
   req.auth.status = subscription.status;
+
+  next();
+}
+
+export async function requireAdmin(req: Request, res: Response, next: NextFunction): Promise<void> {
+  if (!req.auth) {
+    res.status(401).json({ message: "Unauthorized" });
+    return;
+  }
+
+  const rows = await prisma.$queryRaw<Array<{ role: string | null }>>`
+    select role::text as role
+    from public.profiles
+    where id::text = ${req.auth.userId}
+    limit 1
+  `;
+
+  const currentRole = rows[0]?.role;
+  req.auth.role = currentRole === "admin" || currentRole === "user" ? currentRole : null;
+
+  if (req.auth.role !== "admin") {
+    res.status(403).json({ message: "Admin role required" });
+    return;
+  }
 
   next();
 }

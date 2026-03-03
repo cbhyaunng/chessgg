@@ -5,6 +5,7 @@ import Stripe from "stripe";
 import { z } from "zod";
 import { PrismaClientKnownRequestError } from "@prisma/client/runtime/library";
 import { OAuth2Client } from "google-auth-library";
+import { createClient } from "@supabase/supabase-js";
 import type { GameDetail, PaginatedResponse, PlayerSummary } from "@chessgg/shared";
 import { env } from "./config/env.js";
 import { createAccessToken, createRefreshToken, verifyRefreshToken } from "./lib/auth.js";
@@ -13,9 +14,10 @@ import { filterGames, normalizePlatform, normalizeRange, normalizeTimeControl, n
 import { captureException } from "./lib/logger.js";
 import { buildKeyMoments, parseMovesWithClock } from "./lib/pgn.js";
 import { buildBasicStats, buildOpeningStats } from "./lib/stats.js";
-import { optionalAuth, requireActiveSubscription, requireAuth } from "./middleware/auth.js";
+import { optionalAuth, requireActiveSubscription, requireAdmin, requireAuth } from "./middleware/auth.js";
 import { authLimiter, globalLimiter } from "./middleware/rate-limit.js";
 import { canRequestAnalysis, consumeAnalysisQuota, createAnalysisJob, getAnalysisJob } from "./services/analysis-service.js";
+import { getProfileRoleByUserId, setProfileRoleByUserId, type ProfileRole } from "./services/profile-service.js";
 import { getDataset } from "./services/platform-service.js";
 import {
   getOrCreateSubscription,
@@ -34,6 +36,7 @@ import {
   findUserByEmail,
   findUserByGoogleSub,
   findUserById,
+  findOrCreateSupabaseUser,
   linkGoogleSubToUser,
 } from "./services/user-service.js";
 
@@ -43,6 +46,7 @@ type AuthResult = {
   user: {
     id: string;
     email: string;
+    role: ProfileRole;
   };
   subscription: {
     plan: "FREE" | "PRO";
@@ -53,6 +57,18 @@ type AuthResult = {
 
 const GoogleAuthBody = z.object({
   idToken: z.string().min(1),
+});
+
+const SupabaseAuthBody = z.object({
+  accessToken: z.string().min(1),
+});
+
+const AdminRoleParams = z.object({
+  userId: z.string().min(1),
+});
+
+const AdminRoleBody = z.object({
+  role: z.enum(["admin", "user"]).nullable(),
 });
 
 const RefreshBody = z.object({
@@ -66,6 +82,15 @@ const LogoutBody = z.object({
 
 const stripe = env.STRIPE_SECRET_KEY ? new Stripe(env.STRIPE_SECRET_KEY) : null;
 const googleClient = new OAuth2Client();
+const supabase =
+  env.SUPABASE_URL && env.SUPABASE_ANON_KEY
+    ? createClient(env.SUPABASE_URL, env.SUPABASE_ANON_KEY, {
+        auth: {
+          autoRefreshToken: false,
+          persistSession: false,
+        },
+      })
+    : null;
 
 function getPeriodEndFromStripeSubscription(
   subscription: Stripe.Subscription | Stripe.Response<Stripe.Subscription>,
@@ -86,11 +111,13 @@ function toAuthPayload(subscription: Awaited<ReturnType<typeof getOrCreateSubscr
 
 async function issueAuthTokens(userId: string, email: string): Promise<AuthResult> {
   const subscription = await getOrCreateSubscription(userId);
+  const role = await getProfileRoleByUserId(userId);
 
   const accessToken = createAccessToken({
     sub: userId,
     email,
     ...toAuthPayload(subscription),
+    role,
   });
   const refreshToken = createRefreshToken(userId);
   await storeRefreshToken(userId, refreshToken);
@@ -101,6 +128,7 @@ async function issueAuthTokens(userId: string, email: string): Promise<AuthResul
     user: {
       id: userId,
       email,
+      role,
     },
     subscription: {
       plan: subscription.plan,
@@ -198,6 +226,40 @@ export function createApp() {
     }
   });
 
+  app.post("/v1/auth/supabase", authLimiter, async (req, res, next) => {
+    try {
+      if (!supabase) {
+        res.status(503).json({ message: "Supabase auth is not configured" });
+        return;
+      }
+
+      const parsed = SupabaseAuthBody.safeParse(req.body);
+      if (!parsed.success) {
+        res.status(400).json({ message: "Invalid body" });
+        return;
+      }
+
+      const { data, error } = await supabase.auth.getUser(parsed.data.accessToken);
+      if (error || !data.user) {
+        res.status(401).json({ message: "Invalid Supabase token" });
+        return;
+      }
+
+      const email = data.user.email?.toLowerCase();
+      const emailVerified = Boolean(data.user.email_confirmed_at);
+      if (!email || !emailVerified) {
+        res.status(401).json({ message: "Verified email is required" });
+        return;
+      }
+
+      const user = await findOrCreateSupabaseUser(data.user.id, email);
+      const authResult = await issueAuthTokens(user.id, user.email);
+      res.status(200).json(authResult);
+    } catch (error) {
+      next(error);
+    }
+  });
+
   app.post("/v1/auth/refresh", authLimiter, async (req, res, next) => {
     try {
       const parsed = RefreshBody.safeParse(req.body);
@@ -259,17 +321,66 @@ export function createApp() {
       }
 
       const subscription = await getOrCreateSubscription(userId);
+      const role = await getProfileRoleByUserId(userId);
       res.json({
         user: {
           id: user.id,
           email: user.email,
           createdAt: user.createdAt,
+          role,
         },
         subscription: {
           plan: subscription.plan,
           status: subscription.status,
           periodEnd: subscription.periodEnd,
         },
+      });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  app.get("/v1/admin/users/:userId/role", requireAuth, requireAdmin, async (req, res, next) => {
+    try {
+      const parsedParams = AdminRoleParams.safeParse(req.params);
+      if (!parsedParams.success) {
+        res.status(400).json({ message: "Invalid params" });
+        return;
+      }
+
+      const role = await getProfileRoleByUserId(parsedParams.data.userId);
+      res.json({
+        userId: parsedParams.data.userId,
+        role,
+      });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  app.patch("/v1/admin/users/:userId/role", requireAuth, requireAdmin, async (req, res, next) => {
+    try {
+      const parsedParams = AdminRoleParams.safeParse(req.params);
+      if (!parsedParams.success) {
+        res.status(400).json({ message: "Invalid params" });
+        return;
+      }
+
+      const parsedBody = AdminRoleBody.safeParse(req.body);
+      if (!parsedBody.success) {
+        res.status(400).json({ message: "Invalid body" });
+        return;
+      }
+
+      const updated = await setProfileRoleByUserId(parsedParams.data.userId, parsedBody.data.role);
+      if (!updated) {
+        res.status(404).json({ message: "Profile not found" });
+        return;
+      }
+
+      res.json({
+        userId: parsedParams.data.userId,
+        role: parsedBody.data.role,
       });
     } catch (error) {
       next(error);

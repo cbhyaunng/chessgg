@@ -33,6 +33,7 @@ export type AuthResponse = {
   user: {
     id: string;
     email: string;
+    role: "admin" | "user" | null;
   };
   subscription: {
     plan: "FREE" | "PRO";
@@ -46,6 +47,7 @@ export type MeResponse = {
     id: string;
     email: string;
     createdAt: string;
+    role: "admin" | "user" | null;
   };
   subscription: {
     plan: "FREE" | "PRO";
@@ -152,6 +154,13 @@ export function loginWithGoogle(idToken: string): Promise<AuthResponse> {
   return request("/v1/auth/google", {
     method: "POST",
     body: { idToken },
+  });
+}
+
+export function loginWithSupabase(accessToken: string): Promise<AuthResponse> {
+  return request("/v1/auth/supabase", {
+    method: "POST",
+    body: { accessToken },
   });
 }
 

@@ -8,6 +8,7 @@ declare global {
         email: string;
         plan: SubscriptionPlan;
         status: SubscriptionStatus;
+        role: "admin" | "user" | null;
       };
       rawBody?: Buffer;
     }

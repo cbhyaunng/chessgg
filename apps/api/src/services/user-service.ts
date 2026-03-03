@@ -36,3 +36,30 @@ export async function linkGoogleSubToUser(userId: string, googleSub: string): Pr
     data: { googleSub },
   });
 }
+
+export async function findOrCreateSupabaseUser(supabaseUserId: string, email: string): Promise<User> {
+  const normalizedEmail = email.toLowerCase();
+
+  const existingById = await findUserById(supabaseUserId);
+  if (existingById) {
+    return existingById;
+  }
+
+  const existingByEmail = await findUserByEmail(normalizedEmail);
+  if (existingByEmail) {
+    return existingByEmail;
+  }
+
+  return prisma.user.create({
+    data: {
+      id: supabaseUserId,
+      email: normalizedEmail,
+      subscription: {
+        create: {
+          plan: "FREE",
+          status: "INACTIVE",
+        },
+      },
+    },
+  });
+}

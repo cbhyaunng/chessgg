@@ -13,6 +13,8 @@ const EnvSchema = z.object({
   JWT_ACCESS_EXPIRES_SEC: z.coerce.number().int().positive().default(900),
   JWT_REFRESH_EXPIRES_SEC: z.coerce.number().int().positive().default(60 * 60 * 24 * 30),
   GOOGLE_CLIENT_ID: z.string().optional(),
+  SUPABASE_URL: z.string().url().optional(),
+  SUPABASE_ANON_KEY: z.string().optional(),
 
   GLOBAL_RATE_LIMIT_WINDOW_MS: z.coerce.number().int().positive().default(60_000),
   GLOBAL_RATE_LIMIT_MAX: z.coerce.number().int().positive().default(120),

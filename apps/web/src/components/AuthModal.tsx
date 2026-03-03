@@ -1,6 +1,7 @@
 import { GoogleLogin } from "@react-oauth/google";
 import { useEffect, useState } from "react";
 import { useAuth } from "../context/useAuth";
+import { isSupabaseConfigured } from "../lib/supabase";
 
 const googleClientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
 
@@ -63,32 +64,37 @@ export function AuthModal() {
         <p>현재 화면에서 바로 로그인할 수 있습니다.</p>
 
         {!googleClientId ? <p className="error-text">VITE_GOOGLE_CLIENT_ID가 설정되지 않았습니다.</p> : null}
+        {!isSupabaseConfigured ? (
+          <p className="error-text">VITE_SUPABASE_URL 또는 VITE_SUPABASE_ANON_KEY가 설정되지 않았습니다.</p>
+        ) : null}
 
         <div className="google-login-wrap">
-          <GoogleLogin
-            onSuccess={async (credentialResponse) => {
-              const idToken = credentialResponse.credential;
-              if (!idToken) {
-                setError("Google credential을 받지 못했습니다.");
-                return;
-              }
+          {googleClientId && isSupabaseConfigured ? (
+            <GoogleLogin
+              onSuccess={async (credentialResponse) => {
+                const idToken = credentialResponse.credential;
+                if (!idToken) {
+                  setError("Google credential을 받지 못했습니다.");
+                  return;
+                }
 
-              setError(null);
-              setPending(true);
+                setError(null);
+                setPending(true);
 
-              try {
-                await loginWithGoogle(idToken);
-              } catch (e) {
-                setError((e as Error).message);
-              } finally {
-                setPending(false);
-              }
-            }}
-            onError={() => {
-              setError("Google 로그인에 실패했습니다.");
-            }}
-            useOneTap={false}
-          />
+                try {
+                  await loginWithGoogle(idToken);
+                } catch (e) {
+                  setError((e as Error).message);
+                } finally {
+                  setPending(false);
+                }
+              }}
+              onError={() => {
+                setError("Google 로그인에 실패했습니다.");
+              }}
+              useOneTap={false}
+            />
+          ) : null}
         </div>
 
         {pending ? <p>로그인 처리 중...</p> : null}
