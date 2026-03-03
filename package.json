@@ -1,0 +1,20 @@
+{
+  "name": "chessgg",
+  "private": true,
+  "version": "0.1.0",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "npm run build -w @chessgg/shared && concurrently -n api,web -c cyan,magenta \"npm run dev -w @chessgg/api\" \"npm run dev -w @chessgg/web\"",
+    "dev:api": "npm run build -w @chessgg/shared && npm run dev -w @chessgg/api",
+    "dev:web": "npm run build -w @chessgg/shared && npm run dev -w @chessgg/web",
+    "build": "npm run build -w @chessgg/shared && npm run build -w @chessgg/api && npm run build -w @chessgg/web",
+    "lint": "npm run lint -w @chessgg/api && npm run lint -w @chessgg/web",
+    "typecheck": "npm run build -w @chessgg/shared && npm run typecheck -w @chessgg/api && npm run typecheck -w @chessgg/web"
+  },
+  "devDependencies": {
+    "concurrently": "^9.2.1"
+  }
+}
