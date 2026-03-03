@@ -1,10 +1,11 @@
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import type { Platform } from "@chessgg/shared";
 import { Chess } from "chess.js";
 import { useMemo } from "react";
 import { Chessboard } from "react-chessboard";
 import { Link, useParams, useSearchParams } from "react-router-dom";
-import { getGameDetail } from "../lib/api";
+import { getAnalysisJob, getGameDetail, runAnalysis } from "../lib/api";
+import { useAuth } from "../context/useAuth";
 import {
   formatDateTime,
   formatDurationSec,
@@ -25,10 +26,35 @@ export function GameDetailPage() {
   const platform = toPlatform(params.platform);
   const username = decodeURIComponent(params.username ?? "");
   const gameId = params.gameId ?? "";
+  const { session, isAuthenticated, openAuthModal } = useAuth();
 
   const detailQuery = useQuery({
     queryKey: ["game-detail", platform, username, gameId],
     queryFn: () => getGameDetail(platform, username, gameId),
+  });
+
+  const analysisJobId = searchParams.get("analysisJob") ?? "";
+  const analysisQuery = useQuery({
+    queryKey: ["analysis-job", analysisJobId, session?.user.id],
+    queryFn: () => getAnalysisJob(session!.accessToken, analysisJobId),
+    enabled: Boolean(analysisJobId && session?.accessToken),
+    refetchInterval: (query) => (query.state.data?.status === "QUEUED" || query.state.data?.status === "PROCESSING" ? 5000 : false),
+  });
+
+  const analysisMutation = useMutation({
+    mutationFn: async () => {
+      if (!session) {
+        throw new Error("로그인이 필요합니다.");
+      }
+      return runAnalysis(session.accessToken, platform, username, gameId);
+    },
+    onSuccess: (result) => {
+      setSearchParams((prev) => {
+        const draft = new URLSearchParams(prev);
+        draft.set("analysisJob", result.jobId);
+        return draft;
+      });
+    },
   });
 
   const fens = useMemo(() => {
@@ -174,6 +200,41 @@ export function GameDetailPage() {
       <article className="card stack-small">
         <h2>PGN</h2>
         <textarea readOnly value={pgn} className="pgn-box" />
+      </article>
+
+      <article className="card stack-small">
+        <h2>PRO 분석 요청</h2>
+        {isAuthenticated ? (
+          <button
+            type="button"
+            onClick={() => analysisMutation.mutate()}
+            disabled={analysisMutation.isPending}
+          >
+            {analysisMutation.isPending ? "요청 중..." : "분석 요청"}
+          </button>
+        ) : (
+          <p>
+            <button
+              type="button"
+              className="inline-auth-button"
+              onClick={() => {
+                openAuthModal();
+              }}
+            >
+              로그인
+            </button>{" "}
+            후 PRO 플랜에서 사용할 수 있습니다.
+          </p>
+        )}
+
+        {analysisMutation.isError ? <p className="error-text">{analysisMutation.error.message}</p> : null}
+        {analysisMutation.isSuccess ? <p>분석 작업이 큐에 등록되었습니다.</p> : null}
+        {analysisQuery.data ? (
+          <p>
+            분석 상태: <strong>{analysisQuery.data.status}</strong> / 작업 ID: {analysisQuery.data.id}
+          </p>
+        ) : null}
+        {analysisQuery.isError ? <p className="error-text">{analysisQuery.error.message}</p> : null}
       </article>
     </section>
   );

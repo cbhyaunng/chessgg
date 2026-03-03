@@ -1,8 +1,10 @@
 import type { GameSummary, PlayerProfile, TimeControlFilter } from "@chessgg/shared";
 import { mapResultFromPlayerResult, parseMovesWithClock, parsePgnTags } from "../lib/pgn.js";
+import { env } from "../config/env.js";
+import { fetchWithRetry } from "../lib/http.js";
 
 const USER_AGENT = "chessgg/0.1 (https://github.com/chessgg/chessgg)";
-const MAX_ARCHIVES = Number(process.env.CHESSCOM_MAX_ARCHIVES ?? 12);
+const MAX_ARCHIVES = env.CHESSCOM_MAX_ARCHIVES;
 
 type ChessComProfile = {
   username: string;
@@ -47,7 +49,7 @@ function mapTimeClass(value: string | undefined): TimeControlFilter | "other" {
 }
 
 async function fetchJson<T>(url: string): Promise<T> {
-  const res = await fetch(url, {
+  const res = await fetchWithRetry(url, {
     headers: {
       "User-Agent": USER_AGENT,
       Accept: "application/json",

@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@chessgg/shared": "file:../../packages/shared",
+    "@react-oauth/google": "^0.12.2",
     "@tanstack/react-query": "^5.90.2",
     "chess.js": "^1.4.0",
     "react": "^19.2.0",

@@ -1,5 +1,7 @@
 import type { GameResult, GameSummary, PlayerProfile, TimeControlFilter } from "@chessgg/shared";
 import { parseMovesWithClock } from "../lib/pgn.js";
+import { env } from "../config/env.js";
+import { fetchWithRetry } from "../lib/http.js";
 
 type LichessProfile = {
   id: string;
@@ -43,7 +45,7 @@ type LichessGame = {
   };
 };
 
-const MAX_GAMES = Number(process.env.LICHESS_MAX_GAMES ?? 200);
+const MAX_GAMES = env.LICHESS_MAX_GAMES;
 
 function mapSpeed(value: string | undefined): TimeControlFilter | "other" {
   if (value === "bullet" || value === "blitz" || value === "rapid") {
@@ -61,7 +63,7 @@ function mapResult(color: "white" | "black", winner: "white" | "black" | undefin
 }
 
 async function fetchJson<T>(url: string): Promise<T> {
-  const res = await fetch(url, {
+  const res = await fetchWithRetry(url, {
     headers: {
       Accept: "application/json",
     },
@@ -94,7 +96,7 @@ export async function fetchLichessProfile(username: string): Promise<PlayerProfi
 }
 
 export async function fetchLichessGames(username: string): Promise<GameSummary[]> {
-  const res = await fetch(
+  const res = await fetchWithRetry(
     `https://lichess.org/api/games/user/${encodeURIComponent(username)}?max=${MAX_GAMES}&pgnInJson=true&clocks=true&opening=true&sort=dateDesc`,
     {
       headers: {

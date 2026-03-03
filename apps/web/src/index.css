@@ -90,6 +90,25 @@ ul {
   color: var(--text-muted);
 }
 
+.top-nav {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.auth-email {
+  color: #d9d3c8;
+  font-size: 0.9rem;
+}
+
+.nav-action {
+  border: 1px solid var(--border);
+  background: var(--bg-muted);
+  color: var(--text-primary);
+  border-radius: 8px;
+  padding: 0.35rem 0.6rem;
+}
+
 .page-content {
   padding: 1.25rem 0 3rem;
 }
@@ -104,6 +123,41 @@ ul {
   display: flex;
   flex-direction: column;
   gap: 1rem;
+}
+
+.home-page {
+  align-items: center;
+}
+
+.home-header,
+.home-search-card,
+.home-mvp-card {
+  width: min(760px, 100%);
+}
+
+.home-header,
+.home-search-card,
+.home-mvp-card {
+  text-align: center;
+}
+
+.home-search-card .search-form {
+  justify-content: center;
+}
+
+.home-search-card .search-form input {
+  min-width: 210px;
+  max-width: 210px;
+  flex: 0 0 210px;
+}
+
+.home-mvp-list {
+  list-style: none;
+  padding-left: 0;
+}
+
+.home-mvp-list li + li {
+  margin-top: 0.25rem;
 }
 
 .card {
@@ -382,6 +436,110 @@ ul {
   font-weight: 600;
 }
 
+.auth-page {
+  align-items: center;
+}
+
+.auth-card {
+  width: min(480px, 100%);
+}
+
+.google-login-wrap {
+  display: flex;
+  justify-content: center;
+  padding: 0.5rem 0;
+}
+
+.auth-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.65);
+  display: grid;
+  place-items: center;
+  z-index: 50;
+  padding: 1rem;
+}
+
+.auth-modal {
+  position: relative;
+  width: min(520px, 100%);
+  background: color-mix(in srgb, var(--bg-surface) 92%, black 8%);
+  text-align: center;
+}
+
+.auth-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+}
+
+.auth-modal-header .nav-action {
+  position: absolute;
+  top: 1rem;
+  right: 1rem;
+}
+
+.inline-auth-button {
+  border: 1px solid var(--border);
+  background: var(--bg-muted);
+  color: var(--text-primary);
+  border-radius: 8px;
+  padding: 0.2rem 0.5rem;
+  cursor: pointer;
+}
+
+.auth-mode-switch {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.auth-mode-switch button {
+  border: 1px solid var(--border);
+  background: var(--bg-muted);
+  color: var(--text-primary);
+  border-radius: 8px;
+  padding: 0.5rem 0.75rem;
+  font-weight: 700;
+}
+
+.auth-mode-switch button.active {
+  background: var(--accent-soft);
+  border-color: #8fc75e;
+}
+
+.auth-card input {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0.55rem 0.75rem;
+  background: #252320;
+  color: var(--text-primary);
+}
+
+.auth-card button[type=\"submit\"],
+.pro-card button {
+  border: 1px solid #95cf62;
+  border-radius: 8px;
+  padding: 0.55rem 0.75rem;
+  background: linear-gradient(180deg, #8cc85a 0%, var(--accent-strong) 100%);
+  color: #1b2812;
+  font-weight: 700;
+}
+
+.billing-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.billing-actions button {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0.45rem 0.7rem;
+  background: var(--bg-muted);
+  color: var(--text-primary);
+}
+
 @media (max-width: 960px) {
   .summary-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -403,5 +561,11 @@ ul {
 
   .search-form input {
     min-width: 140px;
+  }
+
+  .home-search-card .search-form input {
+    min-width: 180px;
+    max-width: 180px;
+    flex: 0 0 180px;
   }
 }
