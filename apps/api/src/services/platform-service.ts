@@ -20,7 +20,7 @@ type StoredDatasetRow = Prisma.PlatformProfileCacheGetPayload<{
   };
 }>;
 
-type SyncMode = "full" | "incremental";
+type SyncMode = "bootstrap" | "full" | "incremental";
 
 function buildCacheKey(platform: Platform, usernameLower: string): string {
   return `${platform}:${usernameLower}`;
@@ -44,6 +44,14 @@ function isSyncExpired(startedAt: Date | null): boolean {
 
 function isStale(row: StoredDatasetRow): boolean {
   return row.staleAt.getTime() <= Date.now();
+}
+
+function getMaxGamesForMode(mode: SyncMode): number {
+  if (mode === "bootstrap") {
+    return env.PLATFORM_BOOTSTRAP_MAX_GAMES;
+  }
+
+  return env.PLATFORM_SYNC_MAX_GAMES;
 }
 
 function hasNamedOpenings(games: Array<{ opening: string | null }>): boolean {
@@ -178,9 +186,10 @@ async function persistDataset(input: {
 }): Promise<PlatformDataset> {
   const now = new Date();
   const staleAt = new Date(now.getTime() + env.DATASET_STALE_MS);
+  const maxGamesForMode = getMaxGamesForMode(input.mode);
   const latestPlayedAt =
     input.games.length > 0 ? new Date(input.games.reduce((latest, game) => (game.playedAt > latest ? game.playedAt : latest), input.games[0]!.playedAt)) : null;
-  const isTruncated = input.mode === "full" && input.games.length >= env.PLATFORM_SYNC_MAX_GAMES;
+  const isTruncated = input.mode !== "incremental" && input.games.length >= maxGamesForMode;
 
   return prisma.$transaction(async (tx) => {
     const cacheRow = await tx.platformProfileCache.upsert({
@@ -216,11 +225,11 @@ async function persistDataset(input: {
         syncStatus: PlatformSyncStatus.IDLE,
         syncFinishedAt: now,
         syncError: null,
-        isTruncated: input.mode === "full" ? isTruncated : undefined,
+        isTruncated: input.mode === "incremental" ? undefined : isTruncated,
       },
     });
 
-    if (input.mode === "full") {
+    if (input.mode === "full" || input.mode === "bootstrap") {
       await tx.platformGameCache.deleteMany({
         where: {
           profileCacheId: cacheRow.id,
@@ -266,7 +275,7 @@ async function persistDataset(input: {
         syncStatus: PlatformSyncStatus.IDLE,
         syncFinishedAt: now,
         syncError: null,
-        isTruncated: input.mode === "full" ? isTruncated : undefined,
+        isTruncated: input.mode === "incremental" ? undefined : isTruncated,
       },
     });
 
@@ -293,7 +302,7 @@ async function fetchPlatformDataset(
   mode: SyncMode,
   latestPlayedAt?: string,
 ): Promise<{ profile: PlayerProfile; games: GameSummary[] }> {
-  const maxGames = env.PLATFORM_SYNC_MAX_GAMES;
+  const maxGames = getMaxGamesForMode(mode);
 
   if (platform === "chesscom") {
     const [profile, games] = await Promise.all([
@@ -330,6 +339,17 @@ function runSyncOnce(key: string, factory: () => Promise<PlatformDataset>): Prom
 
   pendingSyncs.set(key, next);
   return next;
+}
+
+function triggerBackgroundFullSync(platform: Platform, username: string): void {
+  const normalized = normalizeUsername(username);
+  const key = buildCacheKey(platform, normalized.lower);
+
+  if (pendingSyncs.has(key)) {
+    return;
+  }
+
+  void runSyncOnce(key, () => syncDataset(platform, normalized.display, "full")).catch(() => undefined);
 }
 
 async function syncDataset(platform: Platform, username: string, mode: SyncMode): Promise<PlatformDataset> {
@@ -390,7 +410,10 @@ function scheduleBackgroundRefresh(platform: Platform, username: string, row: St
     return;
   }
 
-  void runSyncOnce(key, () => syncDataset(platform, username, "incremental")).catch(() => undefined);
+  const mode: SyncMode =
+    needsOpeningRepair(row) || (row.isTruncated && !row.lastFullSyncAt) ? "full" : "incremental";
+
+  void runSyncOnce(key, () => syncDataset(platform, username, mode)).catch(() => undefined);
 }
 
 export async function getDataset(platform: Platform, username: string): Promise<PlatformDataset> {
@@ -414,7 +437,7 @@ export async function getDataset(platform: Platform, username: string): Promise<
     const dataset = buildDatasetFromRow(stored);
     memoryCache.set(key, dataset);
 
-    if (isStale(stored)) {
+    if (isStale(stored) || (stored.isTruncated && !stored.lastFullSyncAt)) {
       scheduleBackgroundRefresh(platform, normalized.display, stored);
     }
 
@@ -426,5 +449,11 @@ export async function getDataset(platform: Platform, username: string): Promise<
     return pending;
   }
 
-  return runSyncOnce(key, () => syncDataset(platform, normalized.display, "full"));
+  return runSyncOnce(key, async () => {
+    const dataset = await syncDataset(platform, normalized.display, "bootstrap");
+    setTimeout(() => {
+      triggerBackgroundFullSync(platform, normalized.display);
+    }, 0);
+    return dataset;
+  });
 }

@@ -27,6 +27,7 @@ const EnvSchema = z.object({
   DATASET_TTL_MS: z.coerce.number().int().positive().default(5 * 60 * 1000),
   DATASET_STALE_MS: z.coerce.number().int().positive().default(10 * 60 * 1000),
   DATASET_SYNC_TIMEOUT_MS: z.coerce.number().int().positive().default(15 * 60 * 1000),
+  PLATFORM_BOOTSTRAP_MAX_GAMES: z.coerce.number().int().positive().default(100),
   PLATFORM_SYNC_MAX_GAMES: z.coerce.number().int().positive().default(10_000),
   CHESSCOM_MAX_ARCHIVES: z.coerce.number().int().positive().default(120),
   LICHESS_MAX_GAMES: z.coerce.number().int().positive().default(10_000),
