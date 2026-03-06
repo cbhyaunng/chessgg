@@ -2,9 +2,11 @@ import type { GameSummary, PlayerProfile, TimeControlFilter } from "@chessgg/sha
 import { mapResultFromPlayerResult, parseMovesWithClock, parsePgnTags } from "../lib/pgn.js";
 import { env } from "../config/env.js";
 import { fetchWithRetry } from "../lib/http.js";
+import type { FetchGamesOptions } from "./types.js";
 
 const USER_AGENT = "chessgg/0.1 (https://github.com/chessgg/chessgg)";
 const MAX_ARCHIVES = env.CHESSCOM_MAX_ARCHIVES;
+const DEFAULT_MAX_GAMES = env.PLATFORM_SYNC_MAX_GAMES;
 
 type ChessComProfile = {
   username: string;
@@ -67,6 +69,19 @@ async function fetchJson<T>(url: string): Promise<T> {
   return (await res.json()) as T;
 }
 
+function toMonthKey(value: Date): string {
+  return `${value.getUTCFullYear()}-${String(value.getUTCMonth() + 1).padStart(2, "0")}`;
+}
+
+function getArchiveMonthKey(url: string): string | null {
+  const match = url.match(/\/games\/(\d{4})\/(\d{2})$/);
+  if (!match) {
+    return null;
+  }
+
+  return `${match[1]}-${match[2]}`;
+}
+
 export async function fetchChessComProfile(username: string): Promise<PlayerProfile> {
   const [profile, stats] = await Promise.all([
     fetchJson<ChessComProfile>(`https://api.chess.com/pub/player/${encodeURIComponent(username)}`),
@@ -86,18 +101,28 @@ export async function fetchChessComProfile(username: string): Promise<PlayerProf
   };
 }
 
-export async function fetchChessComGames(username: string): Promise<GameSummary[]> {
+export async function fetchChessComGames(username: string, options: FetchGamesOptions = {}): Promise<GameSummary[]> {
   const archivePayload = await fetchJson<{ archives: string[] }>(
     `https://api.chess.com/pub/player/${encodeURIComponent(username)}/games/archives`,
   );
 
+  const maxGames = Math.max(1, options.maxGames ?? DEFAULT_MAX_GAMES);
+  const sinceMs = options.since ? new Date(options.since).getTime() : Number.NaN;
+  const hasSince = Number.isFinite(sinceMs);
+  const sinceMonthKey = hasSince ? toMonthKey(new Date(sinceMs)) : null;
   const archiveUrls = [...archivePayload.archives].reverse().slice(0, MAX_ARCHIVES);
-  const archiveResponses = await Promise.all(archiveUrls.map((url) => fetchJson<ChessComGamesArchiveResponse>(url)));
-
   const targetUsername = username.toLowerCase();
   const games: GameSummary[] = [];
 
-  for (const archive of archiveResponses) {
+  archiveLoop: for (const archiveUrl of archiveUrls) {
+    const archiveMonthKey = getArchiveMonthKey(archiveUrl);
+    if (sinceMonthKey && archiveMonthKey && archiveMonthKey < sinceMonthKey) {
+      break;
+    }
+
+    const archive = await fetchJson<ChessComGamesArchiveResponse>(archiveUrl);
+    const archiveGames: GameSummary[] = [];
+
     for (const game of archive.games) {
       const whiteUsername = game.white.username?.toLowerCase();
       const blackUsername = game.black.username?.toLowerCase();
@@ -118,7 +143,7 @@ export async function fetchChessComGames(username: string): Promise<GameSummary[
 
       const platformGameId = game.url.split("/").at(-1) ?? `${game.end_time ?? Date.now()}`;
 
-      games.push({
+      archiveGames.push({
         id: `chesscom:${platformGameId}`,
         platform: "chesscom",
         platformGameId,
@@ -141,7 +166,20 @@ export async function fetchChessComGames(username: string): Promise<GameSummary[
         timeSpentSec,
       });
     }
+
+    archiveGames.sort((a, b) => new Date(b.playedAt).getTime() - new Date(a.playedAt).getTime());
+
+    for (const game of archiveGames) {
+      if (hasSince && new Date(game.playedAt).getTime() < sinceMs) {
+        continue;
+      }
+
+      games.push(game);
+      if (games.length >= maxGames) {
+        break archiveLoop;
+      }
+    }
   }
 
-  return games.sort((a, b) => new Date(b.playedAt).getTime() - new Date(a.playedAt).getTime());
+  return games.sort((a, b) => new Date(b.playedAt).getTime() - new Date(a.playedAt).getTime()).slice(0, maxGames);
 }

@@ -5,7 +5,7 @@ generator client {
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
-  schemas  = ["public", "auth"]
+  schemas  = ["public"]
 }
 
 enum SubscriptionPlan {
@@ -28,6 +28,14 @@ enum AnalysisJobStatus {
   QUEUED
   PROCESSING
   DONE
+  FAILED
+
+  @@schema("public")
+}
+
+enum PlatformSyncStatus {
+  IDLE
+  SYNCING
   FAILED
 
   @@schema("public")
@@ -111,5 +119,59 @@ model AnalysisJob {
   user         User              @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId, requestedAt])
+  @@schema("public")
+}
+
+model PlatformProfileCache {
+  id                  String             @id @default(cuid())
+  platform            String
+  usernameLower       String
+  usernameDisplay     String
+  profileJson         Json
+  gamesCount          Int                @default(0)
+  latestPlayedAt      DateTime?
+  lastFullSyncAt      DateTime?
+  lastIncrementalSyncAt DateTime?
+  staleAt             DateTime
+  syncStatus          PlatformSyncStatus @default(IDLE)
+  syncStartedAt       DateTime?
+  syncFinishedAt      DateTime?
+  syncError           String?
+  isTruncated         Boolean            @default(false)
+  createdAt           DateTime           @default(now())
+  updatedAt           DateTime           @updatedAt
+  games               PlatformGameCache[]
+
+  @@unique([platform, usernameLower])
+  @@index([platform, staleAt])
+  @@schema("public")
+}
+
+model PlatformGameCache {
+  id             String               @id @default(cuid())
+  profileCacheId String
+  platformGameId String
+  url            String
+  playedAt       DateTime
+  timeControl    String
+  timeControlCategory String
+  rated          Boolean
+  color          String
+  result         String
+  opponentUsername String
+  opponentRating Int?
+  playerRating   Int?
+  opening        String?
+  eco            String?
+  pgn            String?
+  totalMoves     Int?
+  timeSpentSec   Int?
+  createdAt      DateTime             @default(now())
+  updatedAt      DateTime             @updatedAt
+  profileCache   PlatformProfileCache @relation(fields: [profileCacheId], references: [id], onDelete: Cascade)
+
+  @@unique([profileCacheId, platformGameId])
+  @@index([profileCacheId, playedAt])
+  @@index([profileCacheId, timeControlCategory, playedAt])
   @@schema("public")
 }

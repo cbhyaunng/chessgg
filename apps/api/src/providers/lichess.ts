@@ -2,6 +2,7 @@ import type { GameResult, GameSummary, PlayerProfile, TimeControlFilter } from "
 import { parseMovesWithClock } from "../lib/pgn.js";
 import { env } from "../config/env.js";
 import { fetchWithRetry } from "../lib/http.js";
+import type { FetchGamesOptions } from "./types.js";
 
 type LichessProfile = {
   id: string;
@@ -95,14 +96,20 @@ export async function fetchLichessProfile(username: string): Promise<PlayerProfi
   };
 }
 
-export async function fetchLichessGames(username: string): Promise<GameSummary[]> {
+export async function fetchLichessGames(username: string, options: FetchGamesOptions = {}): Promise<GameSummary[]> {
+  const maxGames = Math.max(1, options.maxGames ?? MAX_GAMES);
+  const sinceMs = options.since ? new Date(options.since).getTime() : Number.NaN;
+  const hasSince = Number.isFinite(sinceMs);
+  const sinceQuery = hasSince ? `&since=${Math.max(0, sinceMs - 1000)}` : "";
   const res = await fetchWithRetry(
-    `https://lichess.org/api/games/user/${encodeURIComponent(username)}?max=${MAX_GAMES}&pgnInJson=true&clocks=true&opening=true&sort=dateDesc`,
+    `https://lichess.org/api/games/user/${encodeURIComponent(username)}?max=${maxGames}&pgnInJson=true&clocks=true&opening=true&sort=dateDesc${sinceQuery}`,
     {
       headers: {
         Accept: "application/x-ndjson",
       },
     },
+    2,
+    60_000,
   );
 
   if (res.status === 404) {
@@ -164,5 +171,5 @@ export async function fetchLichessGames(username: string): Promise<GameSummary[]
     });
   }
 
-  return games;
+  return games.slice(0, maxGames);
 }
