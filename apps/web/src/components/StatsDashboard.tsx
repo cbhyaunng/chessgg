@@ -58,36 +58,6 @@ export function StatsDashboard({ stats }: StatsDashboardProps) {
           </div>
         )}
       </article>
-
-      <article className="card">
-        <h3>시간대별 성적</h3>
-        <div className="table-wrap">
-          <table className="games-table">
-            <thead>
-              <tr>
-                <th>시간대</th>
-                <th>게임 수</th>
-                <th>승/무/패</th>
-                <th>승률</th>
-              </tr>
-            </thead>
-            <tbody>
-              {stats.hourly
-                .filter((bucket) => bucket.games > 0)
-                .map((bucket) => (
-                  <tr key={bucket.hour}>
-                    <td>{bucket.hour.toString().padStart(2, "0")}:00</td>
-                    <td>{bucket.games}</td>
-                    <td>
-                      {bucket.wins}/{bucket.draws}/{bucket.losses}
-                    </td>
-                    <td>{bucket.winRate.toFixed(1)}%</td>
-                  </tr>
-                ))}
-            </tbody>
-          </table>
-        </div>
-      </article>
     </section>
   );
 }

@@ -10,6 +10,7 @@ import {
   formatDateTime,
   formatDurationSec,
   formatNumber,
+  formatOpeningName,
   formatTimeControl,
   toColorLabel,
   toGameResultLabel,
@@ -117,7 +118,7 @@ export function GameDetailPage() {
         <h1>게임 상세</h1>
         <p>
           {formatDateTime(summary.playedAt)} · {toGameResultLabel(summary.result)} · {formatTimeControl(summary.timeControl)}{" "}
-          · {summary.opening ?? "Unknown"}
+          · {formatOpeningName(summary.opening)}
         </p>
         <p>
           내 색: <strong>{toColorLabel(summary.color)}</strong> / 상대: {summary.opponent.username} (

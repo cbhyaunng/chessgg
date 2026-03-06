@@ -1,5 +1,5 @@
 import type { OpeningStat } from "@chessgg/shared";
-import { formatNumber, formatPercent } from "../lib/format";
+import { formatNumber, formatOpeningName, formatPercent } from "../lib/format";
 
 type OpeningTableProps = {
   items: OpeningStat[];
@@ -27,7 +27,7 @@ export function OpeningTable({ items }: OpeningTableProps) {
             {items.map((opening) => (
               <tr key={`${opening.eco ?? "unknown"}-${opening.opening}`}>
                 <td>
-                  <strong>{opening.opening}</strong>
+                  <strong>{formatOpeningName(opening.opening)}</strong>
                   {opening.eco ? <div className="table-subtext">{opening.eco}</div> : null}
                 </td>
                 <td>{formatNumber(opening.games)}</td>

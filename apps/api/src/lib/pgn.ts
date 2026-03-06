@@ -24,6 +24,35 @@ export function parsePgnTags(pgn: string): Record<string, string> {
   return tags;
 }
 
+function humanizeEcoUrl(url: string | undefined): string | undefined {
+  if (!url) {
+    return undefined;
+  }
+
+  const lastSegment = url.split("/").filter(Boolean).at(-1);
+  if (!lastSegment) {
+    return undefined;
+  }
+
+  const decoded = decodeURIComponent(lastSegment)
+    .replace(/[-_]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  return decoded || undefined;
+}
+
+export function extractOpeningInfoFromPgn(pgn: string): { opening?: string; eco?: string } {
+  const tags = parsePgnTags(pgn);
+  const opening = tags.Opening?.trim() || humanizeEcoUrl(tags.ECOUrl);
+  const eco = tags.ECO?.trim() || undefined;
+
+  return {
+    opening: opening || undefined,
+    eco,
+  };
+}
+
 function parseClockToSec(raw: string): number | undefined {
   const parts = raw.split(":").map((p) => Number(p));
   if (parts.some((v) => Number.isNaN(v))) {

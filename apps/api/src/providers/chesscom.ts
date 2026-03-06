@@ -1,5 +1,5 @@
 import type { GameSummary, PlayerProfile, TimeControlFilter } from "@chessgg/shared";
-import { mapResultFromPlayerResult, parseMovesWithClock, parsePgnTags } from "../lib/pgn.js";
+import { extractOpeningInfoFromPgn, mapResultFromPlayerResult, parseMovesWithClock } from "../lib/pgn.js";
 import { env } from "../config/env.js";
 import { fetchWithRetry } from "../lib/http.js";
 import type { FetchGamesOptions } from "./types.js";
@@ -134,7 +134,7 @@ export async function fetchChessComGames(username: string, options: FetchGamesOp
 
       const player = color === "white" ? game.white : game.black;
       const opponent = color === "white" ? game.black : game.white;
-      const tags = parsePgnTags(game.pgn ?? "");
+      const openingInfo = extractOpeningInfoFromPgn(game.pgn ?? "");
       const moves = game.pgn ? parseMovesWithClock(game.pgn) : [];
 
       const timeSpentSec = moves
@@ -159,8 +159,8 @@ export async function fetchChessComGames(username: string, options: FetchGamesOp
           rating: opponent.rating,
         },
         playerRating: player.rating,
-        opening: tags.Opening,
-        eco: tags.ECO,
+        opening: openingInfo.opening,
+        eco: openingInfo.eco,
         pgn: game.pgn,
         totalMoves: Math.ceil(moves.length / 2),
         timeSpentSec,

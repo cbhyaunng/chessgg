@@ -46,6 +46,17 @@ function isStale(row: StoredDatasetRow): boolean {
   return row.staleAt.getTime() <= Date.now();
 }
 
+function hasNamedOpenings(games: Array<{ opening: string | null }>): boolean {
+  return games.some((game) => {
+    const opening = game.opening?.trim();
+    return Boolean(opening && opening.toLowerCase() !== "unknown");
+  });
+}
+
+function needsOpeningRepair(row: StoredDatasetRow): boolean {
+  return row.games.length > 0 && !hasNamedOpenings(row.games);
+}
+
 function mapStoredProfile(profileJson: Prisma.JsonValue): PlayerProfile {
   return profileJson as unknown as PlayerProfile;
 }
@@ -388,11 +399,18 @@ export async function getDataset(platform: Platform, username: string): Promise<
 
   const memoryHit = memoryCache.get(key);
   if (memoryHit) {
+    if (memoryHit.games.length > 0 && !memoryHit.games.some((game) => game.opening && game.opening.trim().toLowerCase() !== "unknown")) {
+      return runSyncOnce(key, () => syncDataset(platform, normalized.display, "full"));
+    }
     return memoryHit;
   }
 
   const stored = await fetchStoredDatasetRow(platform, normalized.lower);
   if (stored) {
+    if (needsOpeningRepair(stored)) {
+      return runSyncOnce(key, () => syncDataset(platform, normalized.display, "full"));
+    }
+
     const dataset = buildDatasetFromRow(stored);
     memoryCache.set(key, dataset);
 

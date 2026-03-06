@@ -4,6 +4,7 @@ import {
   formatDateTime,
   formatDurationSec,
   formatNumber,
+  formatOpeningName,
   formatTimeControl,
   toColorLabel,
   toGameResultLabel,
@@ -41,7 +42,7 @@ export function GameTable({ platform, username, games }: GameTableProps) {
                 <span className={`color-badge color-${game.color}`}>{toColorLabel(game.color)}</span>
               </td>
               <td>{formatTimeControl(game.timeControl)}</td>
-              <td>{game.opening ?? "-"}</td>
+              <td>{formatOpeningName(game.opening)}</td>
               <td>{game.opponent.username}</td>
               <td>{formatNumber(game.opponent.rating)}</td>
               <td>{formatDurationSec(game.timeSpentSec)}</td>
