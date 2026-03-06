@@ -1,4 +1,4 @@
-import type { BasicStats, GameSummary, OpeningStat } from "@chessgg/shared";
+import type { BasicStats, GameSummary, OpeningColorStat, OpeningStat } from "@chessgg/shared";
 
 function calcStreaks(gamesAsc: GameSummary[]): { win: number; loss: number } {
   let currentWin = 0;
@@ -85,43 +85,75 @@ export function buildBasicStats(
 }
 
 export function buildOpeningStats(games: GameSummary[]): OpeningStat[] {
-  const map = new Map<string, OpeningStat>();
+  type OpeningAccumulator = OpeningStat & {
+    performanceSum: number;
+    performanceCount: number;
+  };
+
+  const createColorStat = (): OpeningColorStat => ({
+    games: 0,
+    wins: 0,
+    draws: 0,
+    losses: 0,
+    winRate: 0,
+  });
+
+  const updateColorStat = (stat: OpeningColorStat, result: GameSummary["result"]): void => {
+    stat.games += 1;
+
+    if (result === "win") {
+      stat.wins += 1;
+    } else if (result === "draw") {
+      stat.draws += 1;
+    } else {
+      stat.losses += 1;
+    }
+
+    stat.winRate = stat.games === 0 ? 0 : Math.round((stat.wins / stat.games) * 1000) / 10;
+  };
+
+  const map = new Map<string, OpeningAccumulator>();
 
   for (const game of games) {
     const opening = game.opening ?? "Unknown";
-    const key = `${opening}|${game.color}`;
+    const key = `${game.eco ?? ""}|${opening}`;
     const existing = map.get(key);
 
     if (!existing) {
-      map.set(key, {
+      const next: OpeningAccumulator = {
         opening,
         eco: game.eco,
-        asColor: game.color,
         games: 1,
-        wins: game.result === "win" ? 1 : 0,
-        draws: game.result === "draw" ? 1 : 0,
-        losses: game.result === "loss" ? 1 : 0,
-        winRate: game.result === "win" ? 100 : 0,
-        avgPerformance: game.playerRating,
-      });
+        white: createColorStat(),
+        black: createColorStat(),
+        avgPerformance: undefined,
+        performanceSum: 0,
+        performanceCount: 0,
+      };
+
+      updateColorStat(next[game.color], game.result);
+      if (game.playerRating !== undefined) {
+        next.performanceSum = game.playerRating;
+        next.performanceCount = 1;
+        next.avgPerformance = game.playerRating;
+      }
+
+      map.set(key, next);
       continue;
     }
 
     existing.games += 1;
-    if (game.result === "win") {
-      existing.wins += 1;
-    } else if (game.result === "draw") {
-      existing.draws += 1;
-    } else {
-      existing.losses += 1;
-    }
+    updateColorStat(existing[game.color], game.result);
 
-    existing.winRate = Math.round((existing.wins / existing.games) * 1000) / 10;
-    if (existing.avgPerformance !== undefined && game.playerRating !== undefined) {
-      existing.avgPerformance =
-        Math.round((((existing.avgPerformance * (existing.games - 1)) + game.playerRating) / existing.games) * 10) / 10;
+    if (game.playerRating !== undefined) {
+      existing.performanceSum += game.playerRating;
+      existing.performanceCount += 1;
+      existing.avgPerformance = Math.round((existing.performanceSum / existing.performanceCount) * 10) / 10;
     }
   }
 
-  return [...map.values()].sort((a, b) => b.games - a.games).slice(0, 30);
+  return [...map.values()]
+    .map(({ performanceSum: _performanceSum, performanceCount: _performanceCount, ...item }) => item)
+    .sort((a, b) => b.games - a.games)
+    .slice(0, 30);
 }

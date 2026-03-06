@@ -93,15 +93,20 @@ export interface HourlyRecord {
   winRate: number;
 }
 
-export interface OpeningStat {
-  opening: string;
-  eco?: string;
-  asColor: "white" | "black";
+export interface OpeningColorStat {
   games: number;
   wins: number;
   draws: number;
   losses: number;
   winRate: number;
+}
+
+export interface OpeningStat {
+  opening: string;
+  eco?: string;
+  games: number;
+  white: OpeningColorStat;
+  black: OpeningColorStat;
   avgPerformance?: number;
 }
 
